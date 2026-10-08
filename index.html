@@ -26,7 +26,7 @@ button{font:inherit;font-size:.9rem;font-weight:600;border:0;border-radius:999px
 button:active{transform:scale(.96)}
 button:disabled{opacity:.3}
 .p{background:var(--ink);color:var(--bg)}.g{background:var(--chip)}.d{background:#d63b2f;color:#fff}
-.del .sp .x{display:grid;place-items:center}
+.del .sp .x{display:none}
 .del .sp{animation:wob .5s infinite alternate}
 @keyframes wob{to{transform:rotate(1.2deg)}}
 .shelf{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -104,6 +104,22 @@ footer{padding:8px 16px 16px;display:grid;gap:10px}
 .it u{transform:scale(calc(1 / var(--z,1)))}
 .it.sel{outline-width:calc(2px / var(--z,1))}
 #zm{display:flex;align-items:center;gap:6px;font-size:.9rem;min-width:0}
+.ob{flex:none;width:var(--w);height:var(--h);position:relative;z-index:1;filter:drop-shadow(3px 2px 4px rgba(0,0,0,.55))}
+.ob svg{width:100%;height:100%;display:block}
+.ob.hang{align-self:flex-start;margin-top:2px}
+.del .sp,.del .ob{touch-action:none}
+.dragging{opacity:.25}
+.ghost{position:fixed;z-index:60;pointer-events:none;margin:0;transform:scale(1.1) rotate(3deg);box-shadow:0 14px 24px -8px rgba(0,0,0,.6);animation:none!important}
+#dmark{position:fixed;width:3px;background:var(--acc);border-radius:2px;z-index:70;pointer-events:none}
+.del .ob{animation:wob .5s infinite alternate}
+.pick{outline:2px solid var(--acc);outline-offset:3px;border-radius:3px}
+#mbar{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#1b1511;color:#f3ece0;padding:8px 10px 8px 16px;border-radius:999px;z-index:30;box-shadow:0 10px 30px -8px rgba(0,0,0,.7);max-width:94vw}
+#mbar span{font-weight:700;font-size:.85rem;max-width:28vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mbar .g{background:rgba(255,255,255,.14);color:#f3ece0;min-width:44px}
+.ogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.oc{background:var(--chip);border-radius:14px;padding:10px 6px 8px;text-align:center;cursor:pointer;display:grid;gap:2px;justify-items:center}
+.oc svg{height:64px;width:100%}.oc b{font-size:.78rem}.oc small{font-size:.68rem;color:var(--mut)}
+.box>button{width:100%}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6em 1.2em;border-radius:999px;font-weight:600;font-size:.9rem;z-index:100;box-shadow:0 8px 24px -6px rgba(0,0,0,.5)}
 .fp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .fp b{padding:.55em .6em;border-radius:12px;background:var(--chip);font-size:1.05rem;font-weight:400;text-align:center;cursor:pointer;border:2px solid transparent}
@@ -114,6 +130,10 @@ h1 small{opacity:.4;margin-left:.4em;font-weight:500}
 <body>
 <div id="app"></div>
 <script>
+let lastErr=0;
+const report=m=>{if(Date.now()-lastErr<3000)return;lastErr=Date.now();const d=document.createElement('div');d.className='toast';d.style.cssText+=';max-width:88vw;white-space:normal;text-align:center';d.textContent=m;document.body.append(d);setTimeout(()=>d.remove(),5000)};
+addEventListener('error',e=>report(e.message&&e.message!='Script error.'?'Erreur : '+e.message+(e.lineno?' (ligne '+e.lineno+')':''):'Erreur du script (origine masquée)'));
+addEventListener('unhandledrejection',e=>{const r=e.reason;report('Erreur : '+((r&&r.message)||r||'inconnue'))});
 const COLORS=['#7b2d3b','#2f4a3a','#23395b','#b8862f','#5b3a5e','#1f5f5b','#d6cab0','#a8512f'];
 const setMode=m=>{document.body.classList.remove('lib','reading');m&&document.body.classList.add(m)};
 const gold=c=>ink(c)=='#fff'?'#e6c77e':'#3a2a14';
@@ -207,10 +227,120 @@ async function closeBook(){
 let shelfDel=false;
 const seed=id=>[...id].reduce((a,c)=>a+c.charCodeAt(0)*7,0);
 let shelfPage=0,bgPage=0,shelfR=4,shelfRH=205,shelfAvail=300;
-const dims=b=>{const k=seed(b.id);return{w:30+Math.min(b.pages.length,15)*2+k%10,h:Math.round(shelfRH*(.72+((k*7)%50)/50*.22))}};
+const dims=b=>{if(b.obj){const o=objOf(b.k);return{w:o.s==2?115:56,h:Math.min(o.h,shelfRH-(o.hang?14:8))}}const k=seed(b.id);return{w:30+Math.min(b.pages.length,15)*2+k%10,h:Math.round(shelfRH*(.72+((k*7)%50)/50*.22))}};
 const curPage=()=>{const c=$('.cases');return c?Math.round(c.scrollLeft/c.clientWidth):0};
 const DECO=[`<svg class="deco" width="40" height="70" viewBox="0 0 40 70"><ellipse cx="13" cy="32" rx="5" ry="15" transform="rotate(-28 13 32)" fill="#4f7a4a"/><ellipse cx="27" cy="28" rx="5" ry="17" transform="rotate(24 27 28)" fill="#6b9a5e"/><ellipse cx="20" cy="24" rx="4.5" ry="19" fill="#58875a"/><path d="M9 46h22l-3 24H12z" fill="#b5653f"/><rect x="8" y="43" width="24" height="5" rx="2" fill="#c97a52"/></svg>`,
 `<svg class="deco" width="44" height="66" viewBox="0 0 44 66"><rect x="9" y="58" width="26" height="6" rx="2" fill="#8a6140"/><rect x="20" y="40" width="4" height="19" fill="#8a6140"/><circle cx="22" cy="24" r="19" fill="#2f6f8f"/><path d="M11 18c6-5 11 1 8 8s-9 5-11 1zM26 30c5-2 10 3 6 8-4 4-8 0-6-8z" fill="#7aa86b"/><path d="M8 14a19 19 0 0 1 28 0" stroke="#e6c77e" stroke-width="2" fill="none"/></svg>`];
+const OBJ=[
+{k:'cactus',n:'Cactus',s:1,h:78,g:'<path d="M16 56h24l-3 22H19z" fill="#b5653f"/><rect x="14" y="52" width="28" height="7" rx="2" fill="#c97a52"/><rect x="22" y="14" width="12" height="40" rx="6" fill="#4f8a5b"/><rect x="10" y="26" width="8" height="18" rx="4" fill="#4f8a5b"/><rect x="12" y="38" width="12" height="7" rx="3" fill="#4f8a5b"/><rect x="38" y="22" width="8" height="16" rx="4" fill="#4f8a5b"/><rect x="32" y="32" width="12" height="7" rx="3" fill="#4f8a5b"/>'},
+{k:'plante',n:'Plante',s:1,h:96,g:'<ellipse cx="18" cy="48" rx="6" ry="20" transform="rotate(-30 18 48)" fill="#4f7a4a"/><ellipse cx="38" cy="44" rx="6" ry="22" transform="rotate(26 38 44)" fill="#6b9a5e"/><ellipse cx="28" cy="38" rx="6" ry="26" fill="#58875a"/><path d="M12 68h32l-4 28H16z" fill="#e8e1d2"/><rect x="10" y="64" width="36" height="7" rx="3" fill="#f3eee2"/>'},
+{k:'bougie',n:'Bougie',s:1,h:60,g:'<rect x="16" y="26" width="24" height="34" rx="3" fill="#e9dcc2"/><rect x="26" y="18" width="3" height="9" fill="#3a2a14"/><path d="M27.5 4c5 5 5 9 0 13-5-4-5-8 0-13z" fill="#ffb347"/><rect x="16" y="54" width="24" height="6" fill="#c9a76a"/>'},
+{k:'sablier',n:'Sablier',s:1,h:70,g:'<rect x="12" y="2" width="32" height="6" rx="2" fill="#8a6140"/><rect x="12" y="62" width="32" height="6" rx="2" fill="#8a6140"/><path d="M16 8h24c0 14-10 18-10 27 0 9 10 13 10 27H16c0-14 10-18 10-27 0-9-10-13-10-27z" fill="#dcefff" fill-opacity=".85" stroke="#8a6140" stroke-width="1.5"/><path d="M22 54h12l-6-8z" fill="#e6c77e"/>'},
+{k:'vase',n:'Fleurs',s:1,h:92,g:'<path d="M28 50V20M28 46l-12-24M28 44l12-22" stroke="#4f7a4a" stroke-width="2.5" fill="none"/><circle cx="28" cy="16" r="8" fill="#e8708a"/><circle cx="14" cy="20" r="7" fill="#f2b84b"/><circle cx="42" cy="20" r="7" fill="#e8708a"/><path d="M16 52h24l-3 40H19z" fill="#2f6f8f"/><rect x="16" y="50" width="24" height="6" rx="3" fill="#3b84a8"/>'},
+{k:'cadre',n:'Cadre',s:1,h:84,g:'<rect x="6" y="14" width="44" height="58" rx="3" fill="#8a6140"/><rect x="11" y="19" width="34" height="48" fill="#f3ece0"/><circle cx="28" cy="38" r="8" fill="#c9a76a"/><path d="M13 67c3-12 12-14 15-14s12 2 15 14z" fill="#7aa86b"/><path d="M20 72l8 12 8-12z" fill="#6b4a31"/>'},
+{k:'globe',n:'Globe',s:2,h:110,g:'<rect x="30" y="100" width="52" height="8" rx="3" fill="#8a6140"/><rect x="53" y="76" width="6" height="26" fill="#8a6140"/><circle cx="56" cy="44" r="40" fill="#2f6f8f"/><path d="M28 30c12-10 22 2 16 14s-18 10-22 2zM62 56c10-4 20 6 12 16-8 8-16 0-12-16z" fill="#7aa86b"/><path d="M18 20a40 40 0 0 1 76 0" stroke="#e6c77e" stroke-width="3" fill="none"/>'},
+{k:'monstera',n:'Grande plante',s:2,h:120,g:'<ellipse cx="34" cy="48" rx="14" ry="28" transform="rotate(-35 34 48)" fill="#3f7a4d"/><ellipse cx="80" cy="46" rx="14" ry="30" transform="rotate(32 80 46)" fill="#5b9a62"/><ellipse cx="56" cy="34" rx="15" ry="32" fill="#4a8956"/><ellipse cx="22" cy="74" rx="11" ry="20" transform="rotate(-60 22 74)" fill="#5b9a62"/><ellipse cx="92" cy="74" rx="11" ry="20" transform="rotate(60 92 74)" fill="#3f7a4d"/><path d="M28 86h56l-8 34H36z" fill="#b5653f"/><rect x="24" y="80" width="64" height="9" rx="4" fill="#c97a52"/>'},
+{k:'chat',n:'Chat',s:2,h:56,g:'<ellipse cx="52" cy="38" rx="40" ry="17" fill="#e9a35b"/><circle cx="88" cy="32" r="14" fill="#e9a35b"/><path d="M78 22l4-12 8 8zM94 20l8-10 2 14z" fill="#e9a35b"/><path d="M82 32h6M92 32h6" stroke="#3a2a14" stroke-width="2" stroke-linecap="round"/><path d="M12 40c-8 2-10 12 0 12" stroke="#e9a35b" stroke-width="7" fill="none" stroke-linecap="round"/>'},
+{k:'horloge',n:'Horloge',s:2,h:100,g:'<rect x="26" y="4" width="60" height="92" rx="6" fill="#6b4a31"/><circle cx="56" cy="30" r="20" fill="#f3ece0"/><path d="M56 30V17M56 30l9 5" stroke="#2b1d13" stroke-width="3" stroke-linecap="round"/><rect x="36" y="58" width="40" height="30" rx="3" fill="#3d2915"/><circle cx="56" cy="76" r="7" fill="#e6c77e"/>'},
+{k:'lampe',n:'Lampe',s:2,h:100,g:'<path d="M34 6h44l14 38H20z" fill="#f2c46d"/><rect x="54" y="44" width="4" height="42" fill="#8a6140"/><rect x="34" y="86" width="44" height="8" rx="4" fill="#8a6140"/>'},
+{k:'suspension',n:'Plante suspendue',s:1,h:150,hang:1,g:'<path d="M28 0L10 36M28 0L46 36M28 0V34" stroke="#c9a76a" stroke-width="1.6" fill="none"/><ellipse cx="17" cy="34" rx="5.5" ry="9" transform="rotate(-35 17 34)" fill="#4f7a4a"/><ellipse cx="39" cy="34" rx="5.5" ry="9" transform="rotate(35 39 34)" fill="#58875a"/><ellipse cx="28" cy="30" rx="5" ry="10" fill="#6b9a5e"/><path d="M9 38h38c0 15-8 25-19 25S9 53 9 38z" fill="#b5653f"/><rect x="7" y="35" width="42" height="6" rx="3" fill="#c97a52"/><path d="M14 58C6 80 20 100 11 132" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M28 62C36 88 20 108 30 146" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M43 58C52 78 38 98 46 124" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="9" cy="78" rx="5" ry="2.8" transform="rotate(-40 9 78)" fill="#6b9a5e"/><ellipse cx="15" cy="104" rx="5" ry="2.8" transform="rotate(35 15 104)" fill="#58875a"/><ellipse cx="11" cy="128" rx="5" ry="2.8" transform="rotate(-30 11 128)" fill="#6b9a5e"/><ellipse cx="33" cy="86" rx="5" ry="2.8" transform="rotate(30 33 86)" fill="#58875a"/><ellipse cx="25" cy="110" rx="5" ry="2.8" transform="rotate(-35 25 110)" fill="#6b9a5e"/><ellipse cx="30" cy="140" rx="5" ry="2.8" transform="rotate(25 30 140)" fill="#58875a"/><ellipse cx="48" cy="78" rx="5" ry="2.8" transform="rotate(35 48 78)" fill="#6b9a5e"/><ellipse cx="42" cy="104" rx="5" ry="2.8" transform="rotate(-35 42 104)" fill="#58875a"/>'},
+{k:'lierre',n:'Lierre retombant',s:2,h:160,hang:1,g:'<path d="M10 0L20 38M102 0L92 38" stroke="#c9a76a" stroke-width="1.6" fill="none"/><ellipse cx="30" cy="34" rx="8" ry="11" transform="rotate(-25 30 34)" fill="#4f7a4a"/><ellipse cx="56" cy="30" rx="8" ry="12" fill="#58875a"/><ellipse cx="82" cy="34" rx="8" ry="11" transform="rotate(25 82 34)" fill="#4f7a4a"/><ellipse cx="44" cy="30" rx="6" ry="10" fill="#6b9a5e"/><ellipse cx="68" cy="30" rx="6" ry="10" fill="#6b9a5e"/><path d="M12 38h88l-6 22H18z" fill="#6b4a31"/><rect x="8" y="34" width="96" height="7" rx="3" fill="#8a6140"/><path d="M22 58C14 90 30 110 20 150" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="16" cy="84" rx="5" ry="2.8" transform="rotate(-40 16 84)" fill="#58875a"/><ellipse cx="24" cy="108" rx="5" ry="2.8" transform="rotate(35 24 108)" fill="#6b9a5e"/><ellipse cx="19" cy="140" rx="5" ry="2.8" transform="rotate(-30 19 140)" fill="#58875a"/><path d="M42 60C50 96 34 118 44 158" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="48" cy="90" rx="5" ry="2.8" transform="rotate(35 48 90)" fill="#58875a"/><ellipse cx="38" cy="112" rx="5" ry="2.8" transform="rotate(-35 38 112)" fill="#6b9a5e"/><ellipse cx="43" cy="148" rx="5" ry="2.8" transform="rotate(30 43 148)" fill="#58875a"/><path d="M60 60C68 92 54 112 62 140" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="66" cy="84" rx="5" ry="2.8" transform="rotate(35 66 84)" fill="#58875a"/><ellipse cx="57" cy="110" rx="5" ry="2.8" transform="rotate(-30 57 110)" fill="#6b9a5e"/><ellipse cx="61" cy="132" rx="5" ry="2.8" transform="rotate(25 61 132)" fill="#58875a"/><path d="M78 60C70 94 86 116 76 156" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="72" cy="86" rx="5" ry="2.8" transform="rotate(-35 72 86)" fill="#58875a"/><ellipse cx="82" cy="112" rx="5" ry="2.8" transform="rotate(35 82 112)" fill="#6b9a5e"/><ellipse cx="77" cy="146" rx="5" ry="2.8" transform="rotate(-30 77 146)" fill="#58875a"/><path d="M94 58C102 86 88 108 96 132" stroke="#4f7a4a" stroke-width="2.6" fill="none" stroke-linecap="round"/><ellipse cx="100" cy="82" rx="5" ry="2.8" transform="rotate(35 100 82)" fill="#58875a"/><ellipse cx="92" cy="106" rx="5" ry="2.8" transform="rotate(-35 92 106)" fill="#6b9a5e"/><ellipse cx="96" cy="126" rx="5" ry="2.8" transform="rotate(30 96 126)" fill="#58875a"/>'}
+];
+const objOf=k=>OBJ.find(o=>o.k==k)||OBJ[0];
+const objHTML=(o,w,h)=>{const d=objOf(o.k);return `<div class="ob${d.hang?' hang':''}" data-id="${o.id}" style="--w:${w}px;--h:${h}px"><svg viewBox="0 0 ${d.s==2?112:56} ${d.h}" preserveAspectRatio="xMid${d.hang?'YMin':'YMax'} meet">${d.g}</svg></div>`};
+const ordOf=b=>b.ord??(parseInt(b.id,36)||0);
+const sortBooks=()=>books.sort((a,b)=>ordOf(a)-ordOf(b));
+let pickId=null;
+function addMenu(){
+ const m=document.createElement('div');m.className='modal';
+ m.innerHTML='<div class="box"><h3>Ajouter</h3><button class="p" id="ab">Nouveau livre</button><button class="g" id="ao">Plante ou objet</button><button class="g" id="ac">Annuler</button></div>';
+ document.body.append(m);
+ m.onclick=e=>{const id=e.target.id;if(id=='ab'){m.remove();newBook()}else if(id=='ao'){m.remove();pickObj()}else if(id=='ac'||e.target==m)m.remove()};
+}
+async function newBook(){
+ const r=await ask('Nouveau livre',{input:1,colors:1,fonts:1,ok:'Créer'});if(!r)return;
+ const b={id:Date.now().toString(36),title:r.title,color:r.color,font:r.font,pages:[[]]};books.push(b);put(b).catch(()=>{});openBook(b);
+}
+function pickObj(){
+ const m=document.createElement('div');m.className='modal';
+ m.innerHTML=`<div class="box"><h3>Plantes et objets</h3><div class="ogrid">${OBJ.map(d=>`<div class="oc" data-k="${d.k}"><svg viewBox="0 0 ${d.s==2?112:56} ${d.h}">${d.g}</svg><b>${d.n}</b><small>${d.s} place${d.s>1?'s':''}</small></div>`).join('')}</div><button class="g">Fermer</button></div>`;
+ document.body.append(m);
+ m.onclick=e=>{const c=e.target.closest('.oc');
+  if(c){const d=objOf(c.dataset.k),o={id:'o'+Date.now().toString(36),obj:true,k:d.k,ord:Date.now()};books.push(o);put(o).catch(()=>{});m.remove();const p=shelfPages(shelfAvail,shelfR,0).pos[o.id];if(p!=null)shelfPage=p;lib();toast(d.n+' ajouté');return}
+  if(e.target==m||e.target.closest('.g'))m.remove()};
+}
+let dragFlag=false;
+function bindShelfDrag(cs){
+ cs.querySelectorAll('.sp,.ob').forEach(el=>el.addEventListener('pointerdown',e=>{
+  if(!shelfDel||e.button>0)return;
+  const id=el.dataset.id,r0=el.getBoundingClientRect(),ox=e.clientX-r0.left,oy=e.clientY-r0.top,x0=e.clientX,y0=e.clientY;
+  let on=false,gh,mark,ref=null,side='a',edgeT=0;
+  const mk=(r,left)=>{mark.style.cssText=`left:${left}px;top:${r.top}px;height:${r.height}px`;mark.hidden=false};
+  const mv0=ev=>{
+   if(!on){
+    if(Math.hypot(ev.clientX-x0,ev.clientY-y0)<8)return;
+    on=true;el.classList.add('dragging');
+    gh=el.cloneNode(true);gh.classList.add('ghost');gh.classList.remove('pick','dragging');document.body.append(gh);
+    mark=document.createElement('div');mark.id='dmark';document.body.append(mark);
+   }
+   gh.style.left=(ev.clientX-ox)+'px';gh.style.top=(ev.clientY-oy)+'px';
+   const els=document.elementsFromPoint(ev.clientX,ev.clientY),t=els.find(n=>n!=el&&n!=gh&&n.matches&&n.matches('.sp,.ob'));
+   if(t){const r=t.getBoundingClientRect();ref=t.dataset.id;side=ev.clientX<r.left+r.width/2?'b':'a';mk(r,side=='b'?r.left-3:r.right+1)}
+   else{
+    const row=els.find(n=>n.matches&&n.matches('.sr'));
+    if(row){
+     const its=[...row.querySelectorAll('.sp,.ob')].filter(n=>n!=el);
+     if(its.length){
+      const f=its[0].getBoundingClientRect(),l=its[its.length-1].getBoundingClientRect();
+      if(ev.clientX<f.left){ref=its[0].dataset.id;side='b';mk(f,f.left-3)}
+      else{ref=its[its.length-1].dataset.id;side='a';mk(l,l.right+1)}
+     }else{ref=null;side='a';mark.hidden=true}
+    }
+   }
+   const cr=cs.getBoundingClientRect(),now=Date.now();
+   if(now-edgeT>800){
+    if(ev.clientX<cr.left+36&&curPage()>0){cs.scrollBy({left:-cs.clientWidth,behavior:'smooth'});edgeT=now}
+    else if(ev.clientX>cr.right-36){cs.scrollBy({left:cs.clientWidth,behavior:'smooth'});edgeT=now}
+   }
+  };
+  const up0=()=>{
+   removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);
+   if(!on)return;
+   gh.remove();mark.remove();el.classList.remove('dragging');dragFlag=true;setTimeout(()=>dragFlag=false,120);
+   const ids=books.map(b=>b.id).filter(i=>i!==id),k=ref==null?ids.length:ids.indexOf(ref)+(side=='a'?1:0);
+   ids.splice(Math.max(0,k),0,id);
+   const by=Object.fromEntries(books.map(b=>[b.id,b]));
+   ids.forEach((i,n)=>{const b=by[i];if(b.ord!==n*10){b.ord=n*10;put(b).catch(()=>{})}});
+   sortBooks();pickId=id;const p=shelfPages(shelfAvail,shelfR,0).pos[id];if(p!=null)shelfPage=p;lib();
+  };
+  const abort=err=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);gh&&gh.remove();mark&&mark.remove();el.classList.remove('dragging');report('Déplacement impossible : '+((err&&err.message)||err))};
+  const mv=ev=>{try{mv0(ev)}catch(err){abort(err)}};
+  const up=()=>{try{up0()}catch(err){abort(err)}};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up);
+ }));
+}
+function showBar(){
+ let bar=$('#mbar');
+ if(!pickId||!shelfDel){bar&&bar.remove();return}
+ const b=books.find(x=>x.id==pickId);if(!b){pickId=null;bar&&bar.remove();return}
+ if(!bar){bar=document.createElement('div');bar.id='mbar';app.append(bar)}
+ bar.innerHTML=`<span>${b.obj?esc(objOf(b.k).n):esc(b.title)}</span><button class="g" data-a="l">‹</button><button class="g" data-a="r">›</button><button class="d" data-a="d">Retirer</button>`;
+ bar.onclick=async e=>{
+  const a=e.target.dataset.a;if(!a)return;
+  if(a=='d'){
+   if(!b.obj&&!await ask(`Supprimer « ${b.title} » ?`,{ok:'Supprimer',danger:1}))return;
+   books=books.filter(x=>x!==b);del(b.id).catch(()=>{});pickId=null;shelfPage=curPage();lib();return;
+  }
+  const i=books.indexOf(b),j=a=='l'?i-1:i+1;if(j<0||j>=books.length)return;
+  const o=books[j],t=ordOf(b);b.ord=ordOf(o);o.ord=t;put(b).catch(()=>{});put(o).catch(()=>{});sortBooks();
+  const p=shelfPages(shelfAvail,shelfR,0).pos[b.id];if(p!=null)shelfPage=p;lib();
+ };
+}
+function pickItem(b){
+ pickId=pickId==b.id?null:b.id;
+ document.querySelectorAll('.pick').forEach(e=>e.classList.remove('pick'));
+ const el=$('.cases [data-id="'+pickId+'"]');el&&el.classList.add('pick');showBar();
+}
 function shelfPages(avail,R,msg,hid){
  const rows=[[]],use=[0],pos={};
  books.forEach(b=>{const w=dims(b).w;let i=rows.length-1;if(use[i]+w>avail&&rows[i].length){rows.push([]);use.push(0);i++}rows[i].push(b);use[i]+=w+3;pos[b.id]=Math.floor(i/R)});
@@ -218,13 +348,13 @@ function shelfPages(avail,R,msg,hid){
  if(rows.length==n*R&&avail-use[rows.length-1]<56)n++;
  const html=[];
  for(let c=0;c<n;c++){let h='';for(let k=0;k<R;k++){const i=c*R+k,r=rows[i]||[];
-  h+=`<div class="sr">${r.map(b=>{const{w,h}=dims(b);return `<div class="sp" data-s="${seed(b.id)%3}" style="--c:${b.color};--k:${ink(b.color)};--g:${gold(b.color)};${fv(b)};--w:${w}px;--h:${h}px${b.id==hid?';visibility:hidden':''}" data-id="${b.id}"><button class="x" aria-label="Retirer">×</button><span>${esc(b.title)}</span></div>`}).join('')||(msg&&!books.length&&c==0&&k==1?'<p class="empty">Aucun livre pour l’instant.<br>Ajoute le premier !</p>':'')}${r.length&&avail-use[i]>66?DECO[i%2]:''}</div><div class="plank"></div>`}
+  h+=`<div class="sr">${r.map(b=>{const{w,h}=dims(b);if(b.obj)return objHTML(b,w,h);return `<div class="sp" data-s="${seed(b.id)%3}" style="--c:${b.color};--k:${ink(b.color)};--g:${gold(b.color)};${fv(b)};--w:${w}px;--h:${h}px${b.id==hid?';visibility:hidden':''}" data-id="${b.id}"><button class="x" aria-label="Retirer">×</button><span>${esc(b.title)}</span></div>`}).join('')||(msg&&!books.length&&c==0&&k==1?'<p class="empty">Aucun livre pour l’instant.<br>Ajoute le premier !</p>':'')}</div><div class="plank"></div>`}
   html.push(h)}
  return{html,pos,n};
 }
 function lib(){
  cur=null;setMode('lib');
- app.innerHTML=`<header><h1 class="big">Bibliothèque</h1><button class="${shelfDel?'p':'g'}" id="rm">${shelfDel?'Terminer':'Retirer'}</button><button class="p" id="new">+ Livre</button></header><main class="shelf"><div class="cases${shelfDel?' del':''}"></div><div class="dots"></div></main>`;
+ app.innerHTML=`<header><h1 class="big">Bibliothèque</h1><button class="${shelfDel?'p':'g'}" id="rm">${shelfDel?'Terminer':'Ranger'}</button><button class="p" id="new">+ Ajouter</button></header><main class="shelf"><div class="cases${shelfDel?' del':''}"></div><div class="dots"></div></main>`;
  const cs=$('.cases'),dots=$('.dots'),ch=cs.clientHeight-32,R=Math.max(2,Math.min(5,Math.round(ch/230)));
  shelfR=R;shelfRH=Math.max(110,Math.floor(ch/R)-16);shelfAvail=Math.max(100,cs.clientWidth-72);
  document.documentElement.style.setProperty('--rh',shelfRH+'px');
@@ -236,13 +366,16 @@ function lib(){
  const gp=i=>cs.scrollTo({left:Math.max(0,Math.min(n-1,i))*cs.clientWidth,behavior:'smooth'});
  cs.onscroll=upd;upd();
  dots.onclick=e=>{const t=e.target;if(t.dataset.i!=null)gp(+t.dataset.i);else if(t.id=='cp')gp(curPage()-1);else if(t.id=='cn')gp(curPage()+1)};
- $('#rm').onclick=()=>{shelfPage=curPage();shelfDel=!shelfDel;lib()};
- $('#new').onclick=async()=>{const r=await ask('Nouveau livre',{input:1,colors:1,fonts:1,ok:'Créer'});if(!r)return;const b={id:Date.now().toString(36),title:r.title,color:r.color,font:r.font,pages:[[]]};books.push(b);put(b).catch(()=>{});openBook(b)};
- cs.querySelectorAll('.sp').forEach(el=>el.onclick=async()=>{
-  const b=books.find(b=>b.id==el.dataset.id);
-  if(shelfDel){if(await ask(`Supprimer « ${b.title} » ?`,{ok:'Supprimer',danger:1})){books=books.filter(i=>i!==b);del(b.id).catch(()=>{});shelfPage=curPage();lib()}}
-  else pullOut(el,b);
+ $('#rm').onclick=()=>{shelfPage=curPage();shelfDel=!shelfDel;pickId=null;lib();if(shelfDel)toast('Glisse pour déplacer · touche pour choisir')};
+ $('#new').onclick=addMenu;
+ cs.querySelectorAll('.sp,.ob').forEach(el=>el.onclick=()=>{
+  const b=books.find(b=>b.id==el.dataset.id);if(!b||dragFlag)return;
+  if(shelfDel)return pickItem(b);
+  if(!b.obj)pullOut(el,b).catch(()=>{opening=0;openBook(b)});
  });
+ if(shelfDel&&pickId){const el=cs.querySelector('[data-id="'+pickId+'"]');el&&el.classList.add('pick')}
+ showBar();
+ if(shelfDel)bindShelfDrag(cs);
 }
 function openBook(b){
  const cs=$('.cases'),c=cs&&cs.querySelectorAll('.case')[curPage()],m=$('.shelf');
@@ -410,9 +543,10 @@ async function exportPDF(){
    jp.push({bytes:new Uint8Array(await blob.arrayBuffer()),w:CW,h:CH});
   }
   const pdf=makePDF(jp,450,600),name=(b.title.replace(/[\\/:*?"<>|]+/g,'').trim()||'livre')+'.pdf';
-  const dl=window.claude&&window.claude.use?await window.claude.use('downloads').catch(()=>null):null;
-  if(dl)await dl.save({filename:name,data:pdf});
-  else{const u=URL.createObjectURL(pdf),a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
+  let dl=null,saved=false;
+  try{dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null}catch(e){dl=null}
+  if(dl){try{await dl.save({filename:name,data:pdf});saved=true}catch(e){if(e&&e.code=='declined')saved=true}}
+  if(!saved){const u=URL.createObjectURL(pdf),a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
  }catch(e){if(!e||e.code!='declined')toast('Export impossible')}
  if(btn.isConnected){btn.disabled=false;btn.textContent='PDF'}
 }
@@ -441,7 +575,7 @@ function bookView(){
  <footer>${edit?'<div class="row"><button class="g" id="addi">+ Image</button><button class="g" id="addp">+ Page</button><button class="g" id="delp">Suppr. page</button></div>':''}<div class="nav"><button class="g" id="pv">‹</button><span id="pn"></span><button class="g" id="nx">›</button><button class="g" id="zm" aria-label="Zoom"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg><span id="zl">${zoom}×</span></button></div></footer><input type="file" id="file" accept="image/*" multiple hidden>`;
  page=$('#page');lp=$('#lpage');stage=$('#stage');applyZoom(false);
  if(bgFresh){bgFresh=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{const g=$('.bgs');g&&g.classList.add('dim');setMode('reading')}))}else setMode('reading')
- $('#back').onclick=closeBook;$('#pdf').onclick=exportPDF;$('#zm').onclick=()=>setZoom(zoom>=3?1:zoom+1);
+ $('#back').onclick=()=>closeBook().catch(()=>{opening=0;lib()});$('#pdf').onclick=exportPDF;$('#zm').onclick=()=>setZoom(zoom>=3?1:zoom+1);
  $('#tt').onclick=async()=>{
   const r=await ask('Modifier le livre',{input:1,colors:1,fonts:1,ok:'Enregistrer',val:cur.title,color:cur.color,font:cur.font||'Manrope'});
   if(!r)return;
@@ -481,7 +615,7 @@ function bookView(){
 }
 addEventListener('keydown',e=>{const c=$('.cases');if(!cur&&c&&!$('.modal')){if(e.key=='ArrowRight')c.scrollBy({left:c.clientWidth,behavior:'smooth'});if(e.key=='ArrowLeft')c.scrollBy({left:-c.clientWidth,behavior:'smooth'});return}if(!cur||$('.modal'))return;if(e.key=='ArrowRight')go(1);if(e.key=='ArrowLeft')go(-1)});
 addEventListener('resize',()=>{if(!cur&&$('.cases')){shelfPage=curPage();lib()}});
-all().catch(()=>[]).then(b=>{books=b||[];lib()});
+all().catch(()=>[]).then(b=>{books=b||[];sortBooks();lib()});
 </script>
 </body>
 </html>
