@@ -100,6 +100,11 @@ footer{padding:8px 16px 16px;display:grid;gap:10px}
 .sw{display:flex;gap:10px;flex-wrap:wrap}.sw i{width:32px;height:32px;border-radius:50%;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}.sw i.on{outline:2.5px solid var(--ink);outline-offset:3px}
 .box .row{justify-content:flex-end}
 .box{max-height:90vh;overflow:auto}
+.center.zoomed{overflow:hidden}
+.it u{transform:scale(calc(1 / var(--z,1)))}
+.it.sel{outline-width:calc(2px / var(--z,1))}
+#zm{display:flex;align-items:center;gap:6px;font-size:.9rem;min-width:0}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6em 1.2em;border-radius:999px;font-weight:600;font-size:.9rem;z-index:100;box-shadow:0 8px 24px -6px rgba(0,0,0,.5)}
 .fp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .fp b{padding:.55em .6em;border-radius:12px;background:var(--chip);font-size:1.05rem;font-weight:400;text-align:center;cursor:pointer;border:2px solid transparent}
 .fp b.on{border-color:var(--ink)}
@@ -178,6 +183,7 @@ async function pullOut(el,b){
 /* Fermeture : l'animation d'ouverture à l'envers */
 async function closeBook(){
  if(opening||!cur)return;opening=1;
+ if(zoom>1){zoom=1;zx=zy=0;applyZoom(false)}
  const b=cur,q=page.getBoundingClientRect(),sp=$('.bgs .sp[data-id="'+b.id+'"]');
  if(!sp){opening=0;lib();return}
  const r=sp.getBoundingClientRect(),Dp=q.width,Hf=q.height,T=r.width*Hf/r.height,k0=r.height/Hf;
@@ -219,8 +225,8 @@ function shelfPages(avail,R,msg,hid){
 function lib(){
  cur=null;setMode('lib');
  app.innerHTML=`<header><h1 class="big">Bibliothèque</h1><button class="${shelfDel?'p':'g'}" id="rm">${shelfDel?'Terminer':'Retirer'}</button><button class="p" id="new">+ Livre</button></header><main class="shelf"><div class="cases${shelfDel?' del':''}"></div><div class="dots"></div></main>`;
- const cs=$('.cases'),dots=$('.dots'),ch=cs.clientHeight-24,R=Math.max(3,Math.min(5,Math.round(ch/230)));
- shelfR=R;shelfRH=Math.max(120,Math.floor(ch/R)-16);shelfAvail=Math.max(100,cs.clientWidth-72);
+ const cs=$('.cases'),dots=$('.dots'),ch=cs.clientHeight-32,R=Math.max(2,Math.min(5,Math.round(ch/230)));
+ shelfR=R;shelfRH=Math.max(110,Math.floor(ch/R)-16);shelfAvail=Math.max(100,cs.clientWidth-72);
  document.documentElement.style.setProperty('--rh',shelfRH+'px');
  const{html}=shelfPages(shelfAvail,R,1),n=html.length;
  cs.innerHTML=html.map(h=>`<div class="cwrap"><div class="case">${h}</div></div>`).join('');
@@ -240,10 +246,10 @@ function lib(){
 }
 function openBook(b){
  const cs=$('.cases'),c=cs&&cs.querySelectorAll('.case')[curPage()],m=$('.shelf');
- if(c&&m){const mr=m.getBoundingClientRect(),cr=c.getBoundingClientRect();bgGeo={t:mr.top,b:innerHeight-mr.bottom,l:cr.left,ct:cr.top-mr.top,w:cr.width}}
- else if(!bgGeo)bgGeo={t:60,b:0,l:12,ct:12,w:innerWidth-24};
+ if(c&&m){const mr=m.getBoundingClientRect(),cr=c.getBoundingClientRect();bgGeo={t:0,b:0,l:cr.left,ct:cr.top,w:cr.width}}
+ else if(!bgGeo)bgGeo={t:0,b:0,l:12,ct:70,w:innerWidth-24};
  const q=shelfPages(shelfAvail,shelfR,0).pos[b.id];bgPage=shelfPage=q==null?curPage():q;
- bgFresh=true;shelfDel=false;cur=b;pi=0;edit=false;sel=null;bookView()}
+ bgFresh=true;zoom=1;zx=zy=0;shelfDel=false;cur=b;pi=0;edit=false;sel=null;bookView()}
 
 const st=it=>`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:translate(-50%,-50%) rotate(${it.r}deg);z-index:${it.z}`;
 const HANDLES='<u class="hr">↻</u><u class="hd">⤡</u><u class="hx">×</u>';
@@ -313,13 +319,14 @@ function anim(x1,x2,y1,y2,bump,dur,io,fin){
 }
 function go(d){
  if(busy||pi+d<0||pi+d>=cur.pages.length)return;
+ if(zoom>1){zoom=1;zx=zy=0;applyZoom(false)}
  const W=page.offsetWidth,H=page.offsetHeight,y=H*.85;
  start(d,y);
  anim(d>0?W:-W,d>0?-W:W,y,y,H*.25,700,true,()=>finish(true));
 }
 function bindDrag(){
  stage.onpointerdown=e=>{
-  if(busy)return;
+  if(busy)return;if(zoom>1){startPan(e);return}
   g={x:e.clientX,y:e.clientY-stage.getBoundingClientRect().top,d:0,m:0,v:0,px:e.clientX,pt:e.timeStamp};
   stage.setPointerCapture(e.pointerId);
  };
@@ -345,13 +352,96 @@ function bindDrag(){
 }
 const shrink=f=>new Promise(r=>{const u=URL.createObjectURL(f),i=new Image();i.onerror=()=>r(null);i.onload=()=>{const k=Math.min(1,1400/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);r(c.toDataURL(f.type=='image/png'?'image/png':'image/jpeg',.88))};i.src=u});
 
+/* ---- Export PDF (sans bibliothèque externe) ---- */
+const loadImg=src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src});
+const toast=t=>{const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),2800)};
+async function renderPageCanvas(items,W,H){
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d');
+ c.fillStyle='#fff';c.fillRect(0,0,W,H);
+ for(const it of [...items].sort((a,b)=>a.z-b.z)){
+  const im=await loadImg(it.s);if(!im)continue;
+  const w=it.w*W/100,h=w*im.naturalHeight/im.naturalWidth;
+  c.save();c.translate(it.x*W/100,it.y*H/100);c.rotate(it.r*Math.PI/180);c.drawImage(im,-w/2,-h/2,w,h);c.restore();
+ }
+ return cv;
+}
+async function renderCoverCanvas(b,W,H){
+ const t=FONTS[b.font]||FONTS.Manrope;
+ try{await document.fonts.load(`${t.w} 60px ${t.f}`)}catch(e){}
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d'),k=ink(b.color);
+ c.fillStyle=b.color;c.fillRect(0,0,W,H);
+ const g=c.createLinearGradient(0,0,W*.09,0);g.addColorStop(0,'rgba(0,0,0,.18)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,W*.09,H);
+ c.strokeStyle=k;c.globalAlpha=.85;c.lineWidth=W*.012;c.beginPath();c.arc(W*.125,H*.075,W*.03,0,7);c.stroke();c.globalAlpha=1;
+ const fs=W*.1*t.cz;c.font=`${t.w} ${fs}px ${t.f}`;c.fillStyle=k;c.textBaseline='alphabetic';
+ const lines=[];let line='';
+ for(const w of (t.cup?b.title.toUpperCase():b.title).split(' ')){const test=line?line+' '+w:w;if(c.measureText(test).width>W*.78&&line){lines.push(line);line=w}else line=test}
+ lines.push(line);
+ lines.forEach((l,i)=>c.fillText(l,W*.09,H*.93-(lines.length-1-i)*fs*1.08));
+ return cv;
+}
+function makePDF(jp,W,H){
+ const enc=new TextEncoder(),parts=[],offs=[];let len=0;
+ const push=x=>{const u=typeof x=='string'?enc.encode(x):x;parts.push(u);len+=u.length};
+ const obj=(n,body)=>{offs[n]=len;push(`${n} 0 obj\n${body}\nendobj\n`)};
+ const N=jp.length;
+ push('%PDF-1.4\n');
+ obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+ obj(2,`<< /Type /Pages /Count ${N} /Kids [${jp.map((_,i)=>`${3+3*i} 0 R`).join(' ')}] >>`);
+ jp.forEach((j,i)=>{
+  const p=3+3*i,cs=`q ${W} 0 0 ${H} 0 0 cm /Im${i} Do Q`;
+  obj(p,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im${i} ${p+2} 0 R >> >> /Contents ${p+1} 0 R >>`);
+  obj(p+1,`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+  offs[p+2]=len;push(`${p+2} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${j.w} /Height ${j.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${j.bytes.length} >>\nstream\n`);push(j.bytes);push('\nendstream\nendobj\n');
+ });
+ const xr=len,total=3*N+3;let x=`xref\n0 ${total}\n0000000000 65535 f \n`;
+ for(let n=1;n<total;n++)x+=String(offs[n]).padStart(10,'0')+' 00000 n \n';
+ push(x+`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`);
+ return new Blob(parts,{type:'application/pdf'});
+}
+async function exportPDF(){
+ const btn=$('#pdf'),b=cur;if(!btn||btn.disabled)return;
+ btn.disabled=true;
+ try{
+  const CW=1200,CH=1600,jp=[],n=b.pages.length+1;
+  for(let i=0;i<n;i++){
+   btn.textContent=`${i+1}/${n}`;
+   const cv=i==0?await renderCoverCanvas(b,CW,CH):await renderPageCanvas(b.pages[i-1],CW,CH);
+   const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.92));
+   jp.push({bytes:new Uint8Array(await blob.arrayBuffer()),w:CW,h:CH});
+  }
+  const pdf=makePDF(jp,450,600),name=(b.title.replace(/[\\/:*?"<>|]+/g,'').trim()||'livre')+'.pdf';
+  const dl=window.claude&&window.claude.use?await window.claude.use('downloads').catch(()=>null):null;
+  if(dl)await dl.save({filename:name,data:pdf});
+  else{const u=URL.createObjectURL(pdf),a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
+ }catch(e){if(!e||e.code!='declined')toast('Export impossible')}
+ if(btn.isConnected){btn.disabled=false;btn.textContent='PDF'}
+}
+/* ---- Zoom sur la page courante ---- */
+let zoom=1,zx=0,zy=0;
+function applyZoom(anim){
+ if(!page)return;
+ const mx=(zoom-1)*page.offsetWidth/2,my=(zoom-1)*page.offsetHeight/2;
+ zx=Math.max(-mx,Math.min(mx,zx));zy=Math.max(-my,Math.min(my,zy));
+ page.style.transition=anim?'transform .25s ease':'none';
+ page.style.transform=zoom>1?`translate(${zx}px,${zy}px) scale(${zoom})`:'';
+ page.style.setProperty('--z',zoom);
+ const c=$('.center');c&&c.classList.toggle('zoomed',zoom>1);
+ const l=$('#zl');if(l)l.textContent=zoom+'×';
+}
+function setZoom(z){zoom=z;if(z==1){zx=zy=0}applyZoom(true)}
+function startPan(e){
+ const x0=e.clientX,y0=e.clientY,ix=zx,iy=zy;
+ const mv=ev=>{zx=ix+ev.clientX-x0;zy=iy+ev.clientY-y0;applyZoom(false)};
+ const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up)};
+ addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up);
+}
 function bookView(){
- app.innerHTML=`<div class="bgs${bgFresh?'':' dim'}" style="--t:${bgGeo.t}px;--b:${bgGeo.b}px;--l:${bgGeo.l}px;--ct:${bgGeo.ct}px;--cw:${bgGeo.w}px"><div class="case">${shelfPages(Math.max(100,bgGeo.w-48),shelfR,0,cur.id).html[bgPage]||''}</div></div><header><button class="g" id="back">‹ Livres</button><h1 id="tt" style="cursor:pointer">${esc(cur.title)}<small>✎</small></h1><button class="${edit?'p':'g'}" id="ed">${edit?'Terminer':'Éditer'}</button></header>
+ app.innerHTML=`<div class="bgs${bgFresh?'':' dim'}" style="--t:${bgGeo.t}px;--b:${bgGeo.b}px;--l:${bgGeo.l}px;--ct:${bgGeo.ct}px;--cw:${bgGeo.w}px"><div class="case">${shelfPages(Math.max(100,bgGeo.w-48),shelfR,0,cur.id).html[bgPage]||''}</div></div><header><button class="g" id="back">‹ Livres</button><h1 id="tt" style="cursor:pointer">${esc(cur.title)}<small>✎</small></h1><button class="g" id="pdf">PDF</button><button class="${edit?'p':'g'}" id="ed">${edit?'Terminer':'Éditer'}</button></header>
  <div class="center"><div id="stage" class="${edit?'edit':''}"><div id="lwrap"><div id="lpage"></div></div><div id="page"></div></div></div>
- <footer>${edit?'<div class="row"><button class="g" id="addi">+ Image</button><button class="g" id="addp">+ Page</button><button class="g" id="delp">Suppr. page</button></div>':''}<div class="nav"><button class="g" id="pv">‹</button><span id="pn"></span><button class="g" id="nx">›</button></div></footer><input type="file" id="file" accept="image/*" multiple hidden>`;
- page=$('#page');lp=$('#lpage');stage=$('#stage');
+ <footer>${edit?'<div class="row"><button class="g" id="addi">+ Image</button><button class="g" id="addp">+ Page</button><button class="g" id="delp">Suppr. page</button></div>':''}<div class="nav"><button class="g" id="pv">‹</button><span id="pn"></span><button class="g" id="nx">›</button><button class="g" id="zm" aria-label="Zoom"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg><span id="zl">${zoom}×</span></button></div></footer><input type="file" id="file" accept="image/*" multiple hidden>`;
+ page=$('#page');lp=$('#lpage');stage=$('#stage');applyZoom(false);
  if(bgFresh){bgFresh=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{const g=$('.bgs');g&&g.classList.add('dim');setMode('reading')}))}else setMode('reading')
- $('#back').onclick=closeBook;
+ $('#back').onclick=closeBook;$('#pdf').onclick=exportPDF;$('#zm').onclick=()=>setZoom(zoom>=3?1:zoom+1);
  $('#tt').onclick=async()=>{
   const r=await ask('Modifier le livre',{input:1,colors:1,fonts:1,ok:'Enregistrer',val:cur.title,color:cur.color,font:cur.font||'Manrope'});
   if(!r)return;
@@ -367,7 +457,7 @@ function bookView(){
   $('#delp').onclick=async()=>{if(!await ask('Supprimer cette page ?',{ok:'Supprimer',danger:1}))return;if(cur.pages.length>1){cur.pages.splice(pi,1);pi=Math.min(pi,cur.pages.length-1)}else cur.pages[0]=[];sel=null;save();show()};
   page.onpointerdown=e=>{
    const t=e.target,d=t.closest('.it');
-   if(!d){if(sel){sel=null;select(null)}return}
+   if(!d){if(sel){sel=null;select(null)}if(zoom>1)startPan(e);return}
    const items=cur.pages[pi],it=items.find(i=>i.id==d.dataset.id);
    if(t.classList.contains('hx')){cur.pages[pi]=items.filter(i=>i!==it);sel=null;save();show();return}
    if(sel!=it.id){it.z=Math.max(0,...items.map(i=>i.z))+1;d.style.zIndex=it.z;select(it.id)}
